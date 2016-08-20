@@ -23,81 +23,62 @@ var (
 		Help: "Current status of ES",
 	})
 
-	MemoryPoolYoungUsedBytes    = pool_gauge_vec("young", "used")
-	MemoryPoolOldUsedBytes      = pool_gauge_vec("old", "used")
-	MemoryPoolSurvivorUsedBytes = pool_gauge_vec("survivor", "used")
-	MemoryPoolYoungMaxBytes     = pool_gauge_vec("young", "max")
-	MemoryPoolOldMaxBytes       = pool_gauge_vec("old", "max")
-	MemoryPoolSurvivorMaxBytes  = pool_gauge_vec("survivor", "max")
-
-	MemoryHeapUsed = prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Name: "es_memory_heap_used_bytes",
-			Help: "Current heap in bytes",
-		},
-		[]string{"node"},
-	)
-	MemoryHeapMax = prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Name: "es_memory_heap_max_bytes",
-			Help: "Max heap in bytes",
-		},
-		[]string{"node"},
-	)
-
-	GcYoungCount = gc_count_gauge_vec("young")
-	GcOldCount   = gc_count_gauge_vec("old")
-	GcYoungTime  = gc_time_gauge_vec("young")
-	GcOldTime    = gc_time_gauge_vec("old")
+	metrics = []*parser.Metric{
+		gcPoolCount("young"),
+		gcPoolCount("old"),
+		gcPoolTime("young"),
+		gcPoolTime("old"),
+		memPool("young", "used"),
+		memPool("old", "used"),
+		memPool("young", "max"),
+		memPool("old", "max"),
+		heap("max"),
+		heap("used"),
+	}
 )
 
-func pool_gauge_vec(pool, t string) *prometheus.GaugeVec {
-	return prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Name: fmt.Sprintf("es_memory_pool_%s_%s_bytes", pool, t),
-			Help: fmt.Sprintf("%s memory of pool %s", t, pool),
-		},
-		[]string{"node"},
+func heap(t string) *parser.Metric {
+	return parser.NewMetric(
+		fmt.Sprintf("es_memory_heap_%s_bytes", t),
+		fmt.Sprintf("%s heap in bytes", t),
+		fmt.Sprintf("jvm.mem.heap_%s_in_bytes", t),
+		parser.LabelHost,
 	)
 }
 
-func gc_count_gauge_vec(pool string) *prometheus.GaugeVec {
-	return prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Name: fmt.Sprintf("es_gc_%s_collection_count", pool),
-			Help: fmt.Sprintf("Number of collections of %s GC", pool),
-		},
-		[]string{"node"},
+func memPool(pool, t string) *parser.Metric {
+	return parser.NewMetric(
+		fmt.Sprintf("es_memory_pool_%s_%s_bytes", pool, t),
+		fmt.Sprintf("%s memory of pool %s", t, pool),
+		fmt.Sprintf("jvm.mem.pools.%s.%s_in_bytes", pool, t),
+		parser.LabelHost,
+	)
+
+}
+
+func gcPoolTime(pool string) *parser.Metric {
+	return parser.NewMetric(
+		fmt.Sprintf("es_gc_%s_collection_time_ms", pool),
+		fmt.Sprintf("Time of collections of %s GC", pool),
+		fmt.Sprintf("jvm.gc.collectors.%s.collection_time_in_millis", pool),
+		parser.LabelNodeId,
 	)
 }
 
-func gc_time_gauge_vec(pool string) *prometheus.GaugeVec {
-	return prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Name: fmt.Sprintf("es_gc_%s_collection_time_ms", pool),
-			Help: fmt.Sprintf("Time of collections of %s GC", pool),
-		},
-		[]string{"node"},
+func gcPoolCount(pool string) *parser.Metric {
+	return parser.NewMetric(
+		fmt.Sprintf("es_gc_%s_collection_count", pool),
+		fmt.Sprintf("Number of collections of %s GC", pool),
+		fmt.Sprintf("jvm.gc.collectors.%s.collection_count", pool),
+		parser.LabelNodeId,
 	)
 }
 
 func init() {
 	prometheus.MustRegister(up)
-
-	prometheus.MustRegister(MemoryPoolYoungUsedBytes)
-	prometheus.MustRegister(MemoryPoolOldUsedBytes)
-	prometheus.MustRegister(MemoryPoolSurvivorUsedBytes)
-	prometheus.MustRegister(MemoryPoolYoungMaxBytes)
-	prometheus.MustRegister(MemoryPoolOldMaxBytes)
-	prometheus.MustRegister(MemoryPoolSurvivorMaxBytes)
-
-	prometheus.MustRegister(MemoryHeapUsed)
-	prometheus.MustRegister(MemoryHeapMax)
-
-	prometheus.MustRegister(GcYoungCount)
-	prometheus.MustRegister(GcOldCount)
-	prometheus.MustRegister(GcYoungTime)
-	prometheus.MustRegister(GcOldTime)
+	for i := range metrics {
+		prometheus.MustRegister(metrics[i].Gauge)
+	}
 }
 
 func scrape(ns string) {
@@ -117,24 +98,10 @@ func scrape(ns string) {
 		return
 	}
 
-	for _, n := range v.Nodes {
-		h := n.Host
-
-		pools := n.Jvm.Mem.Pools
-		MemoryPoolYoungUsedBytes.WithLabelValues(h).Set(pools.Young.UsedInBytes)
-		MemoryPoolYoungMaxBytes.WithLabelValues(h).Set(pools.Young.MaxInBytes)
-		MemoryPoolOldUsedBytes.WithLabelValues(h).Set(pools.Old.UsedInBytes)
-		MemoryPoolOldMaxBytes.WithLabelValues(h).Set(pools.Old.MaxInBytes)
-		MemoryPoolSurvivorUsedBytes.WithLabelValues(h).Set(pools.Survivor.UsedInBytes)
-		MemoryPoolSurvivorMaxBytes.WithLabelValues(h).Set(pools.Survivor.MaxInBytes)
-
-		MemoryHeapUsed.WithLabelValues(h).Set(n.Jvm.Mem.HeapUsedInBytes)
-		MemoryHeapMax.WithLabelValues(h).Set(n.Jvm.Mem.HeapMaxInBytes)
-
-		GcYoungCount.WithLabelValues(h).Set(n.Jvm.Gc.Collectors.Young.CollectionCount)
-		GcOldCount.WithLabelValues(h).Set(n.Jvm.Gc.Collectors.Old.CollectionCount)
-		GcYoungTime.WithLabelValues(h).Set(n.Jvm.Gc.Collectors.Young.CollectionTimeInMillis)
-		GcOldTime.WithLabelValues(h).Set(n.Jvm.Gc.Collectors.Old.CollectionTimeInMillis)
+	for nodeName, jobject := range v.Nodes {
+		for i := range metrics {
+			metrics[i].Observe(nodeName, jobject)
+		}
 	}
 
 	up.Set(1)
