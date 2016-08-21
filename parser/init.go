@@ -47,13 +47,13 @@ func NewMetric(name string, desc string, path string, label LabelType) *Metric {
 	}
 }
 
-func (this Metric) Observe(nodeName string, jobject *json.RawMessage) error {
+func (metric Metric) Observe(nodeName string, jobject *json.RawMessage) error {
 	var result interface{}
 	err := json.Unmarshal(*jobject, &result)
 	if err != nil {
 		return err
 	}
-	jresult, err := jmespath.Search(this.Path, result)
+	jresult, err := jmespath.Search(metric.Path, result)
 	if err != nil {
 		return err
 	}
@@ -64,10 +64,10 @@ func (this Metric) Observe(nodeName string, jobject *json.RawMessage) error {
 		return err
 	}
 	label := jlabel.(string)
-	if this.Label == LabelNodeId {
+	if metric.Label == LabelNodeId {
 		label = fmt.Sprintf("%s-%s", label, nodeName)
 	}
-	this.Gauge.WithLabelValues(label).Set(value)
+	metric.Gauge.WithLabelValues(label).Set(value)
 	return nil
 
 }

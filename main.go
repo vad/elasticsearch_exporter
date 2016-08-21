@@ -76,8 +76,8 @@ func gcPoolCount(pool string) *parser.Metric {
 
 func init() {
 	prometheus.MustRegister(up)
-	for i := range metrics {
-		prometheus.MustRegister(metrics[i].Gauge)
+	for _, metric := range metrics {
+		prometheus.MustRegister(metric.Gauge)
 	}
 }
 
@@ -99,8 +99,11 @@ func scrape(ns string) {
 	}
 
 	for nodeName, jobject := range v.Nodes {
-		for i := range metrics {
-			metrics[i].Observe(nodeName, jobject)
+		for _, metric := range metrics {
+			err := metric.Observe(nodeName, jobject)
+			if err != nil {
+				log.Println("Error observing metric from '", metric.Path, "' ", err.Error())
+			}
 		}
 	}
 
