@@ -15,8 +15,9 @@ import (
 )
 
 var (
-	es   = flag.String("es", "http://localhost:9200", "ES URL")
-	bind = flag.String("bind", ":9092", "Address to bind to")
+	es           = flag.String("es", "http://localhost:9200", "ES URL")
+	bind         = flag.String("bind", ":9092", "Address to bind to")
+	timeInterval = flag.Int("time", 5, "Time interval between scrape runs, in seconds")
 
 	up = prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "es_up",
@@ -115,12 +116,15 @@ func scrapeForever() {
 	for {
 		scrape(ns)
 
-		time.Sleep(5 * time.Second)
+		time.Sleep(time.Duration(*timeInterval) * time.Second)
 	}
 }
 
 func main() {
 	flag.Parse()
+	if *timeInterval < 1 {
+		log.Fatal("Time interval must be >= 1")
+	}
 
 	go scrapeForever()
 
