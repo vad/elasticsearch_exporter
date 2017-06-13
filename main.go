@@ -24,6 +24,10 @@ var (
 		Help: "Current status of ES",
 	})
 
+	metrics []*parser.Metric
+)
+
+func init() {
 	metrics = []*parser.Metric{
 		gcPoolCount("young"),
 		gcPoolCount("old"),
@@ -35,8 +39,41 @@ var (
 		memPool("old", "max"),
 		heap("max"),
 		heap("used"),
+		raw("indices.merges.total"),
+		raw("indices.merges.total_time_in_millis"),
+		raw("indices.merges.total_docs"),
+		raw("indices.merges.total_size_in_bytes"),
+		raw("indices.merges.total_throttled_time_in_millis"),
+		raw("indices.warmer.total"),
+		raw("indices.warmer.total_time_in_millis"),
+		raw("indices.fielddata.memory_size_in_bytes"),
+		raw("indices.segments.count"),
+		raw("indices.segments.memory_in_bytes"),
+		raw("indices.segments.terms_memory_in_bytes"),
+		raw("indices.segments.stored_fields_memory_in_bytes"),
+		raw("indices.segments.term_vectors_memory_in_bytes"),
+		raw("indices.segments.norms_memory_in_bytes"),
+		raw("indices.segments.points_memory_in_bytes"),
+		raw("indices.segments.doc_values_memory_in_bytes"),
+		raw("indices.segments.index_writer_memory_in_bytes"),
+		raw("indices.segments.version_map_memory_in_bytes"),
+		raw("indices.request_cache.memory_size_in_bytes"),
+		raw("indices.request_cache.evictions"),
+		raw("indices.request_cache.hit_count"),
+		raw("indices.request_cache.miss_count"),
+		raw("indices.docs.count"),
+		raw("indices.docs.deleted"),
 	}
-)
+	addToMetrics(totalAndMillis("indices.search.query"))
+	addToMetrics(totalAndMillis("indices.search.scroll"))
+	addToMetrics(totalAndMillis("indices.indexing.index"))
+	addToMetrics(totalAndMillis("indices.indexing.delete"))
+
+	prometheus.MustRegister(up)
+	for _, metric := range metrics {
+		prometheus.MustRegister(metric.Gauge)
+	}
+}
 
 func heap(t string) *parser.Metric {
 	return parser.NewMetric(
@@ -54,7 +91,6 @@ func memPool(pool, t string) *parser.Metric {
 		fmt.Sprintf("jvm.mem.pools.%s.%s_in_bytes", pool, t),
 		parser.LabelHost,
 	)
-
 }
 
 func gcPoolTime(pool string) *parser.Metric {
@@ -75,11 +111,22 @@ func gcPoolCount(pool string) *parser.Metric {
 	)
 }
 
-func init() {
-	prometheus.MustRegister(up)
-	for _, metric := range metrics {
-		prometheus.MustRegister(metric.Gauge)
-	}
+func raw(op string) *parser.Metric {
+	o := strings.Replace(op, ".", "_", -1)
+	return parser.NewMetric(fmt.Sprintf("es_%s", o), op, op, parser.LabelHost)
+}
+
+func totalAndMillis(m string) []*parser.Metric {
+	var out []*parser.Metric
+
+	out = make([]*parser.Metric, 2)
+	out[0] = raw(m + "_total")
+	out[1] = raw(m + "_time_in_millis")
+	return out
+}
+
+func addToMetrics(m []*parser.Metric) {
+	metrics = append(metrics, m...)
 }
 
 func scrape(ns string) {
