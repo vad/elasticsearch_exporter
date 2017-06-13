@@ -80,7 +80,6 @@ func heap(t string) *parser.Metric {
 		fmt.Sprintf("es_memory_heap_%s_bytes", t),
 		fmt.Sprintf("%s heap in bytes", t),
 		fmt.Sprintf("jvm.mem.heap_%s_in_bytes", t),
-		parser.LabelHost,
 	)
 }
 
@@ -89,7 +88,6 @@ func memPool(pool, t string) *parser.Metric {
 		fmt.Sprintf("es_memory_pool_%s_%s_bytes", pool, t),
 		fmt.Sprintf("%s memory of pool %s", t, pool),
 		fmt.Sprintf("jvm.mem.pools.%s.%s_in_bytes", pool, t),
-		parser.LabelHost,
 	)
 }
 
@@ -98,7 +96,6 @@ func gcPoolTime(pool string) *parser.Metric {
 		fmt.Sprintf("es_gc_%s_collection_time_ms", pool),
 		fmt.Sprintf("Time of collections of %s GC", pool),
 		fmt.Sprintf("jvm.gc.collectors.%s.collection_time_in_millis", pool),
-		parser.LabelNodeId,
 	)
 }
 
@@ -107,13 +104,12 @@ func gcPoolCount(pool string) *parser.Metric {
 		fmt.Sprintf("es_gc_%s_collection_count", pool),
 		fmt.Sprintf("Number of collections of %s GC", pool),
 		fmt.Sprintf("jvm.gc.collectors.%s.collection_count", pool),
-		parser.LabelNodeId,
 	)
 }
 
 func raw(op string) *parser.Metric {
 	o := strings.Replace(op, ".", "_", -1)
-	return parser.NewMetric(fmt.Sprintf("es_%s", o), op, op, parser.LabelHost)
+	return parser.NewMetric(fmt.Sprintf("es_%s", o), op, op)
 }
 
 func totalAndMillis(m string) []*parser.Metric {

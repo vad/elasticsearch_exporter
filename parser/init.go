@@ -2,7 +2,6 @@ package parser
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
 
 	"github.com/jmespath/go-jmespath"
@@ -21,23 +20,14 @@ func NewNodeStatsJson(r io.Reader) (*NodeStatsJson, error) {
 	return v, err
 }
 
-type LabelType int
-
-const (
-	LabelHost LabelType = iota
-	LabelNodeId
-)
-
 type Metric struct {
 	Path  string
-	Label LabelType
 	Gauge *prometheus.GaugeVec
 }
 
-func NewMetric(name string, desc string, path string, label LabelType) *Metric {
+func NewMetric(name string, desc string, path string) *Metric {
 	return &Metric{
-		Path:  path,
-		Label: label,
+		Path: path,
 		Gauge: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Name: name,
@@ -64,9 +54,6 @@ func (metric Metric) Observe(nodeName string, jobject *json.RawMessage) error {
 		return err
 	}
 	label := jlabel.(string)
-	if metric.Label == LabelNodeId {
-		label = fmt.Sprintf("%s-%s", label, nodeName)
-	}
 	metric.Gauge.WithLabelValues(label).Set(value)
 	return nil
 
