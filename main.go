@@ -63,7 +63,16 @@ func init() {
 		raw("indices.request_cache.miss_count"),
 		raw("indices.docs.count"),
 		raw("indices.docs.deleted"),
+		raw("indices.query_cache.memory_size_in_bytes"),
+		raw("indices.query_cache.total_count"),
+		raw("indices.query_cache.hit_count"),
+		raw("indices.query_cache.miss_count"),
+		raw("indices.query_cache.cache_size"),
+		raw("indices.query_cache.cache_count"),
+		raw("indices.query_cache.evictions"),
+		raw("indices.recovery.throttle_time_in_millis"),
 	}
+	addToMetrics(totalAndMillis("indices.search.fetch"))
 	addToMetrics(totalAndMillis("indices.search.query"))
 	addToMetrics(totalAndMillis("indices.search.scroll"))
 	addToMetrics(totalAndMillis("indices.indexing.index"))
