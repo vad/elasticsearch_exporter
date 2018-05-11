@@ -2,6 +2,8 @@ package parser
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 
 	"github.com/jmespath/go-jmespath"
@@ -49,7 +51,7 @@ func (metric Metric) Observe(nodeName string, jobject *json.RawMessage) error {
 	}
 	value, ok := jresult.(float64)
 	if !ok {
-		return errors.New(fmt.Sprintf("The value of %s is not a float", metric.Path))
+		return errors.New(fmt.Sprintf("the value of %s is not a float", metric.Path))
 	}
 	
 	jlabel, err := jmespath.Search("host", result)
@@ -58,7 +60,7 @@ func (metric Metric) Observe(nodeName string, jobject *json.RawMessage) error {
 	}
 	label, ok := jlabel.(string)
 	if !ok {
-		return errors.New("Host label is not a string")
+		return errors.New("host label is not a string")
 	}
 	metric.Gauge.WithLabelValues(label).Set(value)
 	return nil
