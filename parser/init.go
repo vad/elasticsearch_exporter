@@ -49,7 +49,7 @@ func (metric NodeMetric) Observe(object interface{}) error {
 	if !ok {
 		return errors.New(fmt.Sprintf("the value of %s is not a float", metric.Path))
 	}
-	
+
 	jlabel, err := jmespath.Search("host", object)
 	if err != nil {
 		return err
@@ -108,4 +108,3 @@ func NewTotalAndMillisMetrics(m string) []*NodeMetric {
 	out[1] = NewRawMetric(m + "_time_in_millis")
 	return out
 }
-

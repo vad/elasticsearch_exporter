@@ -4,11 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/jmespath/go-jmespath"
-	"github.com/prometheus/client_golang/prometheus"
 	"log"
 	"net/http"
 	"strings"
+
+	"github.com/jmespath/go-jmespath"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 var collectorAlreadyRegisteredError = errors.New("can't add metrics to an already registered collector")
@@ -21,7 +22,7 @@ func identity(i interface{}) (r float64, err error) {
 	return
 }
 
-type metricTransform func (interface{}) (float64, error)
+type metricTransform func(interface{}) (float64, error)
 
 type clusterHealthMetric struct {
 	path       string

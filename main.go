@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/mpitt/elasticsearch_exporter/collectors"
 	"log"
 	"net/http"
 	"strings"
@@ -13,6 +12,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	"./collectors"
 	"./parser"
 )
 
