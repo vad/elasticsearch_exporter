@@ -25,7 +25,7 @@ func NewClusterHealthMetric(path string, desc *prometheus.Desc) *ClusterHealthMe
 }
 
 type ClusterHealthCollector struct {
-	url         string
+	url          string
 	metrics      []*ClusterHealthMetric
 	upMetric     *ClusterHealthMetric
 	isRegistered bool
@@ -33,7 +33,7 @@ type ClusterHealthCollector struct {
 
 func NewClusterHealthCollector(clusterUrl string) *ClusterHealthCollector {
 	upMetric := &ClusterHealthMetric{
-		path: 		"",
+		path:       "",
 		descriptor: prometheus.NewDesc("up", "status of the exporter", nil, nil),
 	}
 	return &ClusterHealthCollector{
