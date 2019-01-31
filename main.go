@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"flag"
+	"fmt"
 	"github.com/mpitt/elasticsearch_exporter/collectors"
 	"log"
 	"net/http"
@@ -29,6 +30,9 @@ var (
 )
 
 func init() {
+	flag.Parse()
+	log.Println(fmt.Sprintf("Scraping %s every %d seconds", *es, *timeInterval))
+
 	nodeMetrics = []*parser.NodeMetric{
 		parser.NewGcPoolCountMetric("young"),
 		parser.NewGcPoolCountMetric("old"),
@@ -129,7 +133,6 @@ func scrapeForever() {
 }
 
 func main() {
-	flag.Parse()
 	if *timeInterval < 1 {
 		log.Fatal("Time interval must be >= 1")
 	}

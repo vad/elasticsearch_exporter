@@ -11,55 +11,114 @@ import (
 	"strings"
 )
 
-var CollectorAlreadyRegisteredError = errors.New("can't add metrics to an already registered collector")
+var collectorAlreadyRegisteredError = errors.New("can't add metrics to an already registered collector")
 
-type ClusterHealthMetric struct {
+func identity(i interface{}) (r float64, err error) {
+	r, ok := i.(float64)
+	if !ok {
+		err = errors.New("not a float value")
+	}
+	return
+}
+
+type metricTransform func (interface{}) (float64, error)
+
+type clusterHealthMetric struct {
 	path       string
 	jsonPath   *jmespath.JMESPath
 	descriptor *prometheus.Desc
+	transform  metricTransform
 }
 
-func NewClusterHealthMetric(path string, desc *prometheus.Desc) *ClusterHealthMetric {
+func newClusterHealthMetric(path string, desc *prometheus.Desc, transform metricTransform) *clusterHealthMetric {
 	jmesPath := jmespath.MustCompile(path)
-	return &ClusterHealthMetric{path, jmesPath, desc}
+	if transform == nil {
+		transform = identity
+	}
+	return &clusterHealthMetric{path, jmesPath, desc, transform}
 }
 
 type ClusterHealthCollector struct {
 	url          string
-	metrics      []*ClusterHealthMetric
-	upMetric     *ClusterHealthMetric
+	metrics      []*clusterHealthMetric
+	upMetric     *clusterHealthMetric
 	isRegistered bool
 }
 
 func NewClusterHealthCollector(clusterUrl string) *ClusterHealthCollector {
-	upMetric := &ClusterHealthMetric{
+	c := &ClusterHealthCollector{
+		url:          strings.TrimRight(clusterUrl, "/") + "/_cluster/health",
+		metrics:      []*clusterHealthMetric{},
+		isRegistered: false,
+	}
+
+	c.upMetric = &clusterHealthMetric{
 		path:       "",
 		descriptor: prometheus.NewDesc("up", "status of the exporter", nil, nil),
 	}
-	return &ClusterHealthCollector{
-		url:          strings.TrimRight(clusterUrl, "/") + "/_cluster/health",
-		metrics:      []*ClusterHealthMetric{upMetric},
-		upMetric:     upMetric,
-		isRegistered: false,
-	}
+	c.metrics = append(c.metrics, c.upMetric)
+
+	c.mustAddStatusMetrics()
+	c.MustAddMetric(
+		"number_of_nodes",
+		prometheus.NewDesc("es_nodes_count", "number of nodes in the cluster", nil, nil),
+		nil)
+	c.mustAddShardMetric("active_primary")
+	c.mustAddShardMetric("active")
+	c.mustAddShardMetric("unassigned")
+	c.MustAddMetric(
+		"active_shards_percent_as_number",
+		prometheus.NewDesc("es_active_shards_percent", "percentage of active shards", nil, nil),
+		nil)
+	return c
 }
 
-func (c ClusterHealthCollector) AddMetric(path string, desc *prometheus.Desc) error {
+func (c *ClusterHealthCollector) AddMetric(path string, desc *prometheus.Desc, transform metricTransform) error {
 	if c.isRegistered {
-		return CollectorAlreadyRegisteredError
+		return collectorAlreadyRegisteredError
 	}
-	c.metrics = append(c.metrics, NewClusterHealthMetric(path, desc))
+	c.metrics = append(c.metrics, newClusterHealthMetric(path, desc, transform))
 	return nil
 }
 
-func (c ClusterHealthCollector) AddMetrics(metrics map[string]*prometheus.Desc) (errs []error) {
-	for path, desc := range metrics {
-		err := c.AddMetric(path, desc)
-		if err != nil {
-			errs = append(errs, err)
-		}
+func (c *ClusterHealthCollector) MustAddMetric(path string, desc *prometheus.Desc, transform metricTransform) {
+	err := c.AddMetric(path, desc, transform)
+	if err != nil {
+		panic(err)
 	}
-	return
+}
+
+func statusTransf(status string) metricTransform {
+	return func(i interface{}) (r float64, err error) {
+		s, ok := i.(string)
+		if !ok {
+			err = errors.New("not a string")
+			return
+		}
+		if s == status {
+			r = 1
+		} else {
+			r = 0
+		}
+		return
+	}
+}
+
+func (c *ClusterHealthCollector) mustAddStatusMetrics() {
+	for _, status := range []string{"green", "yellow", "red"} {
+		c.MustAddMetric(
+			"status",
+			prometheus.NewDesc(
+				"es_cluster_status", "status of the cluster", nil, prometheus.Labels{"status": status}),
+			statusTransf(status))
+	}
+}
+
+func (c *ClusterHealthCollector) mustAddShardMetric(shardStatus string) {
+	c.MustAddMetric(
+		fmt.Sprintf("%s_shards", shardStatus),
+		prometheus.NewDesc("es_shards", "count of shards by status", nil, prometheus.Labels{"status": shardStatus}),
+		nil)
 }
 
 func (c ClusterHealthCollector) Describe(describers chan<- *prometheus.Desc) {
@@ -92,6 +151,8 @@ func (c ClusterHealthCollector) Collect(metrics chan<- prometheus.Metric) {
 		return
 	}
 
+	metrics <- c.newUpMetric(1)
+
 	for _, m := range c.metrics {
 		if m.jsonPath == nil {
 			continue
@@ -101,9 +162,9 @@ func (c ClusterHealthCollector) Collect(metrics chan<- prometheus.Metric) {
 			log.Println(err.Error())
 			continue
 		}
-		value, ok := jresult.(float64)
-		if !ok {
-			log.Println(fmt.Sprintf("the value of %s is not a float", m.path))
+		value, err := m.transform(jresult)
+		if err != nil {
+			log.Println(fmt.Sprintf("transform failed for %s: %s", m.path, err.Error()))
 		}
 		metrics <- prometheus.MustNewConstMetric(m.descriptor, prometheus.GaugeValue, value)
 	}
