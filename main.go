@@ -11,9 +11,8 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-
-	"./collectors"
-	"./parser"
+	"github.com/vad/elasticsearch_exporter/collectors"
+	"github.com/vad/elasticsearch_exporter/parser"
 )
 
 var (
