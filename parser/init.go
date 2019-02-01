@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/jmespath/go-jmespath"
 	"github.com/prometheus/client_golang/prometheus"
@@ -22,13 +23,13 @@ func NewNodeStatsJson(r io.Reader) (*NodeStatsJson, error) {
 	return v, err
 }
 
-type Metric struct {
+type NodeMetric struct {
 	Path  string
 	Gauge *prometheus.GaugeVec
 }
 
-func NewMetric(name string, desc string, path string) *Metric {
-	return &Metric{
+func NewNodeMetric(name string, desc string, path string) *NodeMetric {
+	return &NodeMetric{
 		Path: path,
 		Gauge: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
@@ -39,13 +40,8 @@ func NewMetric(name string, desc string, path string) *Metric {
 	}
 }
 
-func (metric Metric) Observe(nodeName string, jobject *json.RawMessage) error {
-	var result interface{}
-	err := json.Unmarshal(*jobject, &result)
-	if err != nil {
-		return err
-	}
-	jresult, err := jmespath.Search(metric.Path, result)
+func (metric NodeMetric) Observe(object interface{}) error {
+	jresult, err := jmespath.Search(metric.Path, object)
 	if err != nil {
 		return err
 	}
@@ -53,8 +49,8 @@ func (metric Metric) Observe(nodeName string, jobject *json.RawMessage) error {
 	if !ok {
 		return errors.New(fmt.Sprintf("the value of %s is not a float", metric.Path))
 	}
-	
-	jlabel, err := jmespath.Search("host", result)
+
+	jlabel, err := jmespath.Search("host", object)
 	if err != nil {
 		return err
 	}
@@ -65,4 +61,50 @@ func (metric Metric) Observe(nodeName string, jobject *json.RawMessage) error {
 	metric.Gauge.WithLabelValues(label).Set(value)
 	return nil
 
+}
+
+func NewHeapMetric(t string) *NodeMetric {
+	return NewNodeMetric(
+		fmt.Sprintf("es_memory_heap_%s_bytes", t),
+		fmt.Sprintf("%s heap in bytes", t),
+		fmt.Sprintf("jvm.mem.heap_%s_in_bytes", t),
+	)
+}
+
+func NewMemPoolMetric(pool, t string) *NodeMetric {
+	return NewNodeMetric(
+		fmt.Sprintf("es_memory_pool_%s_%s_bytes", pool, t),
+		fmt.Sprintf("%s memory of pool %s", t, pool),
+		fmt.Sprintf("jvm.mem.pools.%s.%s_in_bytes", pool, t),
+	)
+}
+
+func NewGcPoolTimeMetric(pool string) *NodeMetric {
+	return NewNodeMetric(
+		fmt.Sprintf("es_gc_%s_collection_time_ms", pool),
+		fmt.Sprintf("Time of collections of %s GC", pool),
+		fmt.Sprintf("jvm.gc.collectors.%s.collection_time_in_millis", pool),
+	)
+}
+
+func NewGcPoolCountMetric(pool string) *NodeMetric {
+	return NewNodeMetric(
+		fmt.Sprintf("es_gc_%s_collection_count", pool),
+		fmt.Sprintf("Number of collections of %s GC", pool),
+		fmt.Sprintf("jvm.gc.collectors.%s.collection_count", pool),
+	)
+}
+
+func NewRawMetric(op string) *NodeMetric {
+	o := strings.Replace(op, ".", "_", -1)
+	return NewNodeMetric(fmt.Sprintf("es_%s", o), op, op)
+}
+
+func NewTotalAndMillisMetrics(m string) []*NodeMetric {
+	var out []*NodeMetric
+
+	out = make([]*NodeMetric, 2)
+	out[0] = NewRawMetric(m + "_total")
+	out[1] = NewRawMetric(m + "_time_in_millis")
+	return out
 }
