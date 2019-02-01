@@ -36,9 +36,9 @@ es_nodes_count 4
 es_shards{status="active"} 348
 es_shards{status="active_primary"} 178
 es_shards{status="unassigned"} 0
-# HELP up status of the exporter
+# HELP up whether the last call to ES succeeded
 # TYPE up gauge
-up 1
+es_up{endpoint="http://localhost:9200/_cluster/health"} 1
 ```
 
 ### Node stats
