@@ -55,7 +55,7 @@ func NewClusterHealthCollector(clusterUrl string) *ClusterHealthCollector {
 
 	c.upMetric = &clusterHealthMetric{
 		path:       "",
-		descriptor: prometheus.NewDesc("up", "status of the exporter", nil, nil),
+		descriptor: prometheus.NewDesc("es_up", "whether the last call to ES succeeded", nil, prometheus.Labels{"endpoint": c.url}),
 	}
 	c.metrics = append(c.metrics, c.upMetric)
 
