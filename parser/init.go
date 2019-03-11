@@ -29,14 +29,17 @@ type NodeMetric struct {
 }
 
 func NewNodeMetric(name string, desc string, path string) *NodeMetric {
+	gv := prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: name,
+			Help: desc,
+		},
+		[]string{"node"},
+	)
+
 	return &NodeMetric{
-		Path: path,
-		Gauge: prometheus.NewGaugeVec(
-			prometheus.GaugeOpts{
-				Name: name,
-				Help: desc,
-			},
-			[]string{"node"}),
+		Path:  path,
+		Gauge: gv,
 	}
 }
 
@@ -98,6 +101,22 @@ func NewGcPoolCountMetric(pool string) *NodeMetric {
 func NewRawMetric(op string) *NodeMetric {
 	o := strings.Replace(op, ".", "_", -1)
 	return NewNodeMetric(fmt.Sprintf("es_%s", o), op, op)
+}
+
+func NewThreadPoolMetrics(pool string) []*NodeMetric {
+	obs := []string{"threads", "queue", "active", "rejected", "largest", "completed"}
+	out := make([]*NodeMetric, 0, len(obs))
+
+	for _, s := range obs {
+		out = append(out,
+			NewNodeMetric(
+				fmt.Sprintf("thread_pool_%s_%s", pool, s),
+				fmt.Sprintf("See thread_pool ES doc"),
+				fmt.Sprintf("thread_pool.%s.%s", pool, s),
+			),
+		)
+	}
+	return out
 }
 
 func NewTotalAndMillisMetrics(m string) []*NodeMetric {

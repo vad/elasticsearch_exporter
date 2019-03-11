@@ -81,6 +81,9 @@ func init() {
 	nodeMetrics = append(nodeMetrics, parser.NewTotalAndMillisMetrics("indices.search.scroll")...)
 	nodeMetrics = append(nodeMetrics, parser.NewTotalAndMillisMetrics("indices.indexing.index")...)
 	nodeMetrics = append(nodeMetrics, parser.NewTotalAndMillisMetrics("indices.indexing.delete")...)
+	for _, pool := range []string{"search", "refresh", "warmer", "write"} {
+		nodeMetrics = append(nodeMetrics, parser.NewThreadPoolMetrics(pool)...)
+	}
 
 	prometheus.MustRegister(collectors.NewClusterHealthCollector(*es))
 	for _, metric := range nodeMetrics {
