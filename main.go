@@ -19,6 +19,8 @@ var (
 	es           = flag.String("es", "http://localhost:9200", "ES URL")
 	bind         = flag.String("bind", ":9092", "Address to bind to")
 	timeInterval = flag.Int("time", 5, "Time interval between scrape runs, in seconds")
+	username     = flag.String("username", "", "Username when XPack security is enabled")
+	password     = flag.String("password", "", "Password for the user when XPack security is enabled")
 
 	up = prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "es_up",
@@ -26,6 +28,10 @@ var (
 	})
 
 	nodeMetrics []*parser.NodeMetric
+
+	client = &http.Client{
+		Timeout: time.Second * 10,
+	}
 )
 
 func init() {
@@ -85,14 +91,20 @@ func init() {
 		nodeMetrics = append(nodeMetrics, parser.NewThreadPoolMetrics(pool)...)
 	}
 
-	prometheus.MustRegister(collectors.NewClusterHealthCollector(*es))
+	prometheus.MustRegister(collectors.NewClusterHealthCollector(*es, *username, *password))
 	for _, metric := range nodeMetrics {
 		prometheus.MustRegister(metric.Gauge)
 	}
 }
 
 func scrape(ns string) {
-	resp, err := http.Get(ns)
+	req, err := http.NewRequest("GET", ns, nil)
+
+	if len(*username) > 0 && len(*password) > 0 {
+		req.SetBasicAuth(*username, *password)
+	}
+
+	resp, err := client.Do(req)
 
 	if err != nil {
 		up.Set(0)

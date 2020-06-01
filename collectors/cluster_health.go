@@ -7,12 +7,17 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/jmespath/go-jmespath"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
 var collectorAlreadyRegisteredError = errors.New("can't add metrics to an already registered collector")
+
+var client = &http.Client{
+	Timeout: time.Second * 10,
+}
 
 func identity(i interface{}) (r float64, err error) {
 	r, ok := i.(float64)
@@ -41,14 +46,18 @@ func newClusterHealthMetric(path string, desc *prometheus.Desc, transform metric
 
 type ClusterHealthCollector struct {
 	url          string
+	username     string
+	password     string
 	metrics      []*clusterHealthMetric
 	upMetric     *clusterHealthMetric
 	isRegistered bool
 }
 
-func NewClusterHealthCollector(clusterUrl string) *ClusterHealthCollector {
+func NewClusterHealthCollector(clusterUrl string, username string, password string) *ClusterHealthCollector {
 	c := &ClusterHealthCollector{
 		url:          strings.TrimRight(clusterUrl, "/") + "/_cluster/health",
+		username:     username,
+		password:     password,
 		metrics:      []*clusterHealthMetric{},
 		isRegistered: false,
 	}
@@ -130,7 +139,13 @@ func (c ClusterHealthCollector) Describe(describers chan<- *prometheus.Desc) {
 }
 
 func (c ClusterHealthCollector) Collect(metrics chan<- prometheus.Metric) {
-	resp, err := http.Get(c.url)
+	req, err := http.NewRequest("GET", c.url, nil)
+
+	if len(c.username) > 0 && len(c.password) > 0 {
+		req.SetBasicAuth(c.username, c.password)
+	}
+
+	resp, err := client.Do(req)
 	if err != nil {
 		metrics <- c.newUpMetric(0)
 		log.Println(err.Error())

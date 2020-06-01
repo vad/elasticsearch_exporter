@@ -9,9 +9,11 @@ $ ./elasticsearch_exporter --es=https://your-es-url:port
 
 ### Options
 
- - `--es`: URL to ElasticSearch, default: `http://localhost:9200`
- - `--bind`: Address to listen on, default: `:9092`
- - `--time`: Scraping interval in seconds (applies to node stats), default `5`
+ - `-es`: URL to ElasticSearch, default: `http://localhost:9200`
+ - `-bind`: Address to listen on, default: `:9092`
+ - `-time`: Scraping interval in seconds (applies to node stats), default `5`
+ - `-username`: Set the username to be used for the request when XPack is enabled
+ - `-password`: Used in conjuction with `username`, set its password
 
 ## Metrics
 
