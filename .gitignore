@@ -26,3 +26,5 @@ _testmain.go
 
 # vim
 *.sw[po]
+
+dist/
