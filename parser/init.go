@@ -5,10 +5,16 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/jmespath/go-jmespath"
 	"github.com/prometheus/client_golang/prometheus"
+)
+
+var (
+	sirenRootAllocatorRegexp = regexp.MustCompile(`^Allocator\(ROOT\) \d+/\d+/(\d+)/(\d+)`)
 )
 
 type NodeStatsJson struct {
@@ -21,6 +27,11 @@ func NewNodeStatsJson(r io.Reader) (*NodeStatsJson, error) {
 	v := &NodeStatsJson{}
 	err := d.Decode(v)
 	return v, err
+}
+
+type Metric interface {
+	Observe(interface{}) error
+	String() string
 }
 
 type NodeMetric struct {
@@ -43,14 +54,14 @@ func NewNodeMetric(name string, desc string, path string) *NodeMetric {
 	}
 }
 
-func (metric NodeMetric) Observe(object interface{}) error {
-	jresult, err := jmespath.Search(metric.Path, object)
+func (m *NodeMetric) Observe(object interface{}) error {
+	jresult, err := jmespath.Search(m.Path, object)
 	if err != nil {
 		return err
 	}
 	value, ok := jresult.(float64)
 	if !ok {
-		return errors.New(fmt.Sprintf("the value of %s is not a float", metric.Path))
+		return errors.New(fmt.Sprintf("the value of %s is not a float", m.Path))
 	}
 
 	jlabel, err := jmespath.Search("host", object)
@@ -61,9 +72,12 @@ func (metric NodeMetric) Observe(object interface{}) error {
 	if !ok {
 		return errors.New("host label is not a string")
 	}
-	metric.Gauge.WithLabelValues(label).Set(value)
+	m.Gauge.WithLabelValues(label).Set(value)
 	return nil
+}
 
+func (m *NodeMetric) String() string {
+	return m.Path
 }
 
 func NewHeapMetric(t string) *NodeMetric {
@@ -126,4 +140,73 @@ func NewTotalAndMillisMetrics(m string) []*NodeMetric {
 	out[0] = NewRawMetric(m + "_total")
 	out[1] = NewRawMetric(m + "_time_in_millis")
 	return out
+}
+
+// siren metrics
+
+type SirenMemoryMetric struct {
+	Peak  *prometheus.GaugeVec
+	Limit *prometheus.GaugeVec
+}
+
+func NewSirenMemoryMetric() *SirenMemoryMetric {
+	peak := prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "es_siren_federate_memory_peak",
+			Help: "Peak memory usage of Siren Federate off-heap storage",
+		},
+		[]string{"node"},
+	)
+	limit := prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "es_siren_federate_memory_limit",
+			Help: "Memory limit of Siren Federate off-heap storage",
+		},
+		[]string{"node"},
+	)
+
+	return &SirenMemoryMetric{
+		Peak:  peak,
+		Limit: limit,
+	}
+}
+
+func (m SirenMemoryMetric) Observe(object interface{}) error {
+	jresult, err := jmespath.Search("memory.root_allocator_dump", object)
+	if err != nil {
+		return err
+	}
+	val, ok := jresult.(string)
+	if !ok {
+		return errors.New("Siren federate changed format for allocator dump")
+	}
+	jlabel, err := jmespath.Search("host", object)
+	if err != nil {
+		return err
+	}
+	label, ok := jlabel.(string)
+	if !ok {
+		return errors.New("host label is not a string")
+	}
+	match := sirenRootAllocatorRegexp.FindStringSubmatch(val)
+	if len(match) < 3 {
+		return errors.New("Siren federate changed format for allocator dump")
+	}
+	if peak, err := strconv.ParseFloat(match[1], 64); err != nil {
+		return err
+	} else {
+		m.Peak.WithLabelValues(label).Set(peak)
+	}
+
+	if limit, err := strconv.ParseFloat(match[2], 64); err != nil {
+		return err
+	} else {
+		m.Limit.WithLabelValues(label).Set(limit)
+	}
+
+	return nil
+}
+
+func (m SirenMemoryMetric) String() string {
+	return "Siren Federate Metrics"
 }

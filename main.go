@@ -15,19 +15,24 @@ import (
 	"github.com/vad/elasticsearch_exporter/parser"
 )
 
+type Metrics []parser.Metric
+
 var (
 	es           = flag.String("es", "http://localhost:9200", "ES URL")
 	bind         = flag.String("bind", ":9092", "Address to bind to")
 	timeInterval = flag.Int("time", 5, "Time interval between scrape runs, in seconds")
 	username     = flag.String("username", "", "Username when XPack security is enabled")
 	password     = flag.String("password", "", "Password for the user when XPack security is enabled")
+	enableSiren  = flag.Bool("enable-siren", false, "Enable Siren Federate Plugin scraping")
 
 	up = prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "es_up",
 		Help: "Current status of ES",
 	})
-
-	nodeMetrics []*parser.NodeMetric
+	sirenUp = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "es_up",
+		Help: "Current status of Siren Federate",
+	})
 
 	client = &http.Client{
 		Timeout: time.Second * 10,
@@ -38,84 +43,36 @@ func init() {
 	flag.Parse()
 	log.Println(fmt.Sprintf("Scraping %s every %d seconds", *es, *timeInterval))
 
-	nodeMetrics = []*parser.NodeMetric{
-		parser.NewGcPoolCountMetric("young"),
-		parser.NewGcPoolCountMetric("old"),
-		parser.NewGcPoolTimeMetric("young"),
-		parser.NewGcPoolTimeMetric("old"),
-		parser.NewMemPoolMetric("young", "used"),
-		parser.NewMemPoolMetric("old", "used"),
-		parser.NewMemPoolMetric("young", "max"),
-		parser.NewMemPoolMetric("old", "max"),
-		parser.NewHeapMetric("max"),
-		parser.NewHeapMetric("used"),
-		parser.NewRawMetric("indices.merges.total"),
-		parser.NewRawMetric("indices.merges.total_time_in_millis"),
-		parser.NewRawMetric("indices.merges.total_docs"),
-		parser.NewRawMetric("indices.merges.total_size_in_bytes"),
-		parser.NewRawMetric("indices.merges.total_throttled_time_in_millis"),
-		parser.NewRawMetric("indices.warmer.total"),
-		parser.NewRawMetric("indices.warmer.total_time_in_millis"),
-		parser.NewRawMetric("indices.fielddata.memory_size_in_bytes"),
-		parser.NewRawMetric("indices.segments.count"),
-		parser.NewRawMetric("indices.segments.memory_in_bytes"),
-		parser.NewRawMetric("indices.segments.terms_memory_in_bytes"),
-		parser.NewRawMetric("indices.segments.stored_fields_memory_in_bytes"),
-		parser.NewRawMetric("indices.segments.term_vectors_memory_in_bytes"),
-		parser.NewRawMetric("indices.segments.norms_memory_in_bytes"),
-		parser.NewRawMetric("indices.segments.points_memory_in_bytes"),
-		parser.NewRawMetric("indices.segments.doc_values_memory_in_bytes"),
-		parser.NewRawMetric("indices.segments.index_writer_memory_in_bytes"),
-		parser.NewRawMetric("indices.segments.version_map_memory_in_bytes"),
-		parser.NewRawMetric("indices.request_cache.memory_size_in_bytes"),
-		parser.NewRawMetric("indices.request_cache.evictions"),
-		parser.NewRawMetric("indices.request_cache.hit_count"),
-		parser.NewRawMetric("indices.request_cache.miss_count"),
-		parser.NewRawMetric("indices.docs.count"),
-		parser.NewRawMetric("indices.docs.deleted"),
-		parser.NewRawMetric("indices.query_cache.memory_size_in_bytes"),
-		parser.NewRawMetric("indices.query_cache.total_count"),
-		parser.NewRawMetric("indices.query_cache.hit_count"),
-		parser.NewRawMetric("indices.query_cache.miss_count"),
-		parser.NewRawMetric("indices.query_cache.cache_size"),
-		parser.NewRawMetric("indices.query_cache.cache_count"),
-		parser.NewRawMetric("indices.query_cache.evictions"),
-		parser.NewRawMetric("indices.recovery.throttle_time_in_millis"),
-	}
-	nodeMetrics = append(nodeMetrics, parser.NewTotalAndMillisMetrics("indices.search.fetch")...)
-	nodeMetrics = append(nodeMetrics, parser.NewTotalAndMillisMetrics("indices.search.query")...)
-	nodeMetrics = append(nodeMetrics, parser.NewTotalAndMillisMetrics("indices.search.scroll")...)
-	nodeMetrics = append(nodeMetrics, parser.NewTotalAndMillisMetrics("indices.indexing.index")...)
-	nodeMetrics = append(nodeMetrics, parser.NewTotalAndMillisMetrics("indices.indexing.delete")...)
-	for _, pool := range []string{"search", "refresh", "warmer", "write"} {
-		nodeMetrics = append(nodeMetrics, parser.NewThreadPoolMetrics(pool)...)
-	}
-
-	prometheus.MustRegister(collectors.NewClusterHealthCollector(*es, *username, *password))
-	for _, metric := range nodeMetrics {
-		prometheus.MustRegister(metric.Gauge)
+	if *timeInterval < 1 {
+		log.Fatal("Time interval must be >= 1")
 	}
 }
 
-func scrape(ns string) {
-	req, err := http.NewRequest("GET", ns, nil)
+func queryEs(url string) (*http.Response, error) {
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
 
 	if len(*username) > 0 && len(*password) > 0 {
 		req.SetBasicAuth(*username, *password)
 	}
 
-	resp, err := client.Do(req)
+	return client.Do(req)
+}
 
+func scrape(ns string, upMetric prometheus.Gauge, metrics []parser.Metric) {
+	resp, err := queryEs(ns)
 	if err != nil {
-		up.Set(0)
+		upMetric.Set(0)
 		log.Println(err.Error())
 		return
 	}
 	defer resp.Body.Close()
-	v, err := parser.NewNodeStatsJson(resp.Body)
 
+	v, err := parser.NewNodeStatsJson(resp.Body)
 	if err != nil {
-		up.Set(0)
+		upMetric.Set(0)
 		log.Println("Error decoding ES JSON:", err.Error())
 		return
 	}
@@ -127,31 +84,48 @@ func scrape(ns string) {
 			log.Println("Error decoding JSON for node", nodeName, ":", err.Error())
 			continue
 		}
-		for _, metric := range nodeMetrics {
+		for _, metric := range metrics {
 			err := metric.Observe(object)
 			if err != nil {
-				log.Println("Error observing metric from '", metric.Path, "' ", err.Error())
+				log.Println("Error observing metric from '", metric.String(), "' ", err.Error())
 			}
 		}
 	}
 
-	up.Set(1)
+	upMetric.Set(1)
 }
 
-func scrapeForever() {
-	ns := strings.TrimRight(*es, "/") + "/_nodes/stats"
+func scrapeForever(endpoint string, up prometheus.Gauge, metrics []parser.Metric) {
+	scrapeUrl := strings.TrimRight(*es, "/") + endpoint
 	t := time.NewTicker(time.Duration(*timeInterval) * time.Second)
 	for range t.C {
-		scrape(ns)
+		scrape(scrapeUrl, up, metrics)
 	}
 }
 
 func main() {
-	if *timeInterval < 1 {
-		log.Fatal("Time interval must be >= 1")
+	// plain es
+	nm := []*parser.NodeMetric{
+		parser.NewRawMetric("indices.recovery.throttle_time_in_millis"),
 	}
 
-	go scrapeForever()
+	nodeMetrics := make([]parser.Metric, len(nm))
+	prometheus.MustRegister(collectors.NewClusterHealthCollector(*es, *username, *password))
+	for i, metric := range nm {
+		prometheus.MustRegister(metric.Gauge)
+		nodeMetrics[i] = metric
+	}
+	go scrapeForever("/_nodes/stats", up, nodeMetrics)
+
+	// siren
+	if *enableSiren {
+		m := parser.NewSirenMemoryMetric()
+		prometheus.MustRegister(m.Peak)
+		prometheus.MustRegister(m.Limit)
+		sirenMetrics := []parser.Metric{m}
+
+		go scrapeForever("/_siren/nodes/stats", sirenUp, sirenMetrics)
+	}
 
 	http.Handle("/metrics", promhttp.Handler())
 
