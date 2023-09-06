@@ -180,7 +180,7 @@ func (c ClusterHealthCollector) Collect(metrics chan<- prometheus.Metric) {
 		}
 		value, err := m.transform(jresult)
 		if err != nil {
-			log.Println(fmt.Sprintf("transform failed for %s: %s", m.path, err.Error()))
+			log.Printf("transform failed for %s: %s\n", m.path, err.Error())
 		}
 		metrics <- prometheus.MustNewConstMetric(m.descriptor, prometheus.GaugeValue, value)
 	}
