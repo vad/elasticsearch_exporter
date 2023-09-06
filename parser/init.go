@@ -5,16 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"regexp"
 	"strconv"
 	"strings"
 
 	"github.com/jmespath/go-jmespath"
 	"github.com/prometheus/client_golang/prometheus"
-)
-
-var (
-	sirenRootAllocatorRegexp = regexp.MustCompile(`^Allocator\(ROOT\) \d+/\d+/(\d+)/(\d+)`)
 )
 
 type NodeStatsJson struct {
@@ -61,7 +56,7 @@ func (m *NodeMetric) Observe(object interface{}) error {
 	}
 	value, ok := jresult.(float64)
 	if !ok {
-		return errors.New(fmt.Sprintf("the value of %s is not a float", m.Path))
+		return fmt.Errorf("the value of %s is not a float", m.Path)
 	}
 
 	jlabel, err := jmespath.Search("host", object)
@@ -125,7 +120,7 @@ func NewThreadPoolMetrics(pool string) []*NodeMetric {
 		out = append(out,
 			NewNodeMetric(
 				fmt.Sprintf("thread_pool_%s_%s", pool, s),
-				fmt.Sprintf("See thread_pool ES doc"),
+				"See thread_pool ES doc",
 				fmt.Sprintf("thread_pool.%s.%s", pool, s),
 			),
 		)
@@ -134,9 +129,7 @@ func NewThreadPoolMetrics(pool string) []*NodeMetric {
 }
 
 func NewTotalAndMillisMetrics(m string) []*NodeMetric {
-	var out []*NodeMetric
-
-	out = make([]*NodeMetric, 2)
+	out := make([]*NodeMetric, 2)
 	out[0] = NewRawMetric(m + "_total")
 	out[1] = NewRawMetric(m + "_time_in_millis")
 	return out
@@ -172,13 +165,13 @@ func NewSirenMemoryMetric() *SirenMemoryMetric {
 }
 
 func (m SirenMemoryMetric) Observe(object interface{}) error {
-	jresult, err := jmespath.Search("memory.root_allocator_dump", object)
+	jresult, err := jmespath.Search("memory.root_allocator_dump_peak_in_bytes", object)
 	if err != nil {
 		return err
 	}
 	val, ok := jresult.(string)
 	if !ok {
-		return errors.New("Siren federate changed format for allocator dump")
+		return errors.New("Cannot find root allocator dump peak")
 	}
 	jlabel, err := jmespath.Search("host", object)
 	if err != nil {
@@ -188,17 +181,21 @@ func (m SirenMemoryMetric) Observe(object interface{}) error {
 	if !ok {
 		return errors.New("host label is not a string")
 	}
-	match := sirenRootAllocatorRegexp.FindStringSubmatch(val)
-	if len(match) < 3 {
-		return errors.New("Siren federate changed format for allocator dump")
-	}
-	if peak, err := strconv.ParseFloat(match[1], 64); err != nil {
+	if peak, err := strconv.ParseFloat(val, 64); err != nil {
 		return err
 	} else {
 		m.Peak.WithLabelValues(label).Set(peak)
 	}
 
-	if limit, err := strconv.ParseFloat(match[2], 64); err != nil {
+	jresult, err = jmespath.Search("memory.root_allocator_dump_limit_in_bytes", object)
+	if err != nil {
+		return err
+	}
+	val, ok = jresult.(string)
+	if !ok {
+		return errors.New("Cannot find root allocator dump limit")
+	}
+	if limit, err := strconv.ParseFloat(val, 64); err != nil {
 		return err
 	} else {
 		m.Limit.WithLabelValues(label).Set(limit)
