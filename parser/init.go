@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strconv"
 	"strings"
 
 	"github.com/jmespath/go-jmespath"
@@ -169,7 +168,7 @@ func (m SirenMemoryMetric) Observe(object interface{}) error {
 	if err != nil {
 		return err
 	}
-	val, ok := jresult.(string)
+	val, ok := jresult.(float64)
 	if !ok {
 		return errors.New("Cannot find root allocator dump peak")
 	}
@@ -181,25 +180,17 @@ func (m SirenMemoryMetric) Observe(object interface{}) error {
 	if !ok {
 		return errors.New("host label is not a string")
 	}
-	if peak, err := strconv.ParseFloat(val, 64); err != nil {
-		return err
-	} else {
-		m.Peak.WithLabelValues(label).Set(peak)
-	}
+	m.Peak.WithLabelValues(label).Set(val)
 
 	jresult, err = jmespath.Search("memory.root_allocator_dump_limit_in_bytes", object)
 	if err != nil {
 		return err
 	}
-	val, ok = jresult.(string)
+	val, ok = jresult.(float64)
 	if !ok {
 		return errors.New("Cannot find root allocator dump limit")
 	}
-	if limit, err := strconv.ParseFloat(val, 64); err != nil {
-		return err
-	} else {
-		m.Limit.WithLabelValues(label).Set(limit)
-	}
+	m.Limit.WithLabelValues(label).Set(val)
 
 	return nil
 }
