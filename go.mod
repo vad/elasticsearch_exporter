@@ -1,6 +1,6 @@
 module github.com/vad/elasticsearch_exporter
 
-go 1.18
+go 1.22
 
 require (
 	github.com/jmespath/go-jmespath v0.4.0
