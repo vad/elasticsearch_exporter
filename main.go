@@ -24,6 +24,7 @@ var (
 	username     = flag.String("username", "", "Username when XPack security is enabled")
 	password     = flag.String("password", "", "Password for the user when XPack security is enabled")
 	enableSiren  = flag.Bool("enable-siren", false, "Enable Siren Federate Plugin scraping")
+	snapshotRepo = flag.String("snapshot-repo", "", "Elasticsearch snapshot repository")
 
 	up = prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "es_up",
@@ -125,6 +126,11 @@ func main() {
 		sirenMetrics := []parser.Metric{m}
 
 		go scrapeForever("/_siren/nodes/stats", sirenUp, sirenMetrics)
+	}
+
+	// snapshot
+	if *snapshotRepo != "" {
+		prometheus.MustRegister(collectors.NewSnapshotCollector(*es, *snapshotRepo, *username, *password))
 	}
 
 	http.Handle("/metrics", promhttp.Handler())

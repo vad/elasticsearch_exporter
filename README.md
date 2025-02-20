@@ -1,23 +1,26 @@
 # elasticsearch_exporter
-ElasticSearch cluster health and node stats exporter for Prometheus
+
+Elasticsearch cluster health and node stats exporter for Prometheus
 
 ## Usage
 
 ```bash
-$ ./elasticsearch_exporter --es=https://your-es-url:port
+./elasticsearch_exporter --es=https://your-es-url:port
 ```
 
 ### Options
 
- - `-es`: URL to ElasticSearch, default: `http://localhost:9200`
- - `-bind`: Address to listen on, default: `:9092`
- - `-time`: Scraping interval in seconds (applies to node stats), default `5`
- - `-username`: Set the username to be used for the request when XPack is enabled
- - `-password`: Used in conjuction with `username`, set its password
+- `-es`: URL to Elasticsearch, default: `http://localhost:9200`
+- `-bind`: Address to listen on, default: `:9092`
+- `-time`: Scraping interval in seconds (applies to node stats), default `5`
+- `-username`: Set the username to be used for the request when XPack is enabled
+- `-password`: Used in conjunction with `username`, set its password
+- `-enable-siren`: Enable _Siren Federate Plugin_ scraping (default is `false`)
+- `-snapshot-repo`: Set the name of the repository to enable snapshot scraping
 
 ## Metrics
 
-The exporter collects metrics from `/_cluster/health` and from `/_nodes/stats`.
+The exporter collects metrics from `/_cluster/health`, `/_nodes/stats`, and `_snapshot/<repository>/_all`.
 
 ### Cluster health
 
@@ -202,4 +205,18 @@ es_memory_pool_young_max_bytes{node="Bobby Drake"} 2.7918336e+08
 # HELP es_memory_pool_young_used_bytes used memory of pool young
 # TYPE es_memory_pool_young_used_bytes gauge
 es_memory_pool_young_used_bytes{node="Bobby Drake"} 2.49621848e+08
+```
+
+### Snapshot
+
+```
+# HELP es_snapshot_last_duration_seconds Duration in seconds of the last snapshot
+# TYPE es_snapshot_last_duration_seconds gauge
+es_snapshot_last_duration_seconds 180.391
+# HELP es_snapshot_last_start_timestamp Unix timestamp of the last snapshot start time
+# TYPE es_snapshot_last_start_timestamp gauge
+es_snapshot_last_start_timestamp 1.7400168e+09
+# HELP es_snapshot_last_successful Indicates whether the last snapshot was successful (1 for success, 0 for failure)
+# TYPE es_snapshot_last_successful gauge
+es_snapshot_last_successful 1
 ```
