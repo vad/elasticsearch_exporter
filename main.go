@@ -61,7 +61,35 @@ func queryEs(url string) (*http.Response, error) {
 	return client.Do(req)
 }
 
-func scrape(ns string, upMetric prometheus.Gauge, metrics []parser.Metric) {
+func scrapeJson(ns string, upMetric prometheus.Gauge, metrics []parser.Metric) {
+	resp, err := queryEs(ns)
+	if err != nil {
+		upMetric.Set(0)
+		log.Println(err.Error())
+		return
+	}
+	defer resp.Body.Close()
+
+	var object interface{}
+	decoder := json.NewDecoder(resp.Body)
+	err = decoder.Decode(&object)
+	if err != nil {
+		upMetric.Set(0)
+		log.Println("Error decoding JSON:", err.Error())
+		return
+	}
+
+	for _, metric := range metrics {
+		err = metric.Observe(object)
+		if err != nil {
+			log.Println("Error observing metric from '", metric.String(), "' ", err.Error())
+		}
+	}
+
+	upMetric.Set(1)
+}
+
+func scrapeNodeStats(ns string, upMetric prometheus.Gauge, metrics []parser.Metric) {
 	resp, err := queryEs(ns)
 	if err != nil {
 		upMetric.Set(0)
@@ -95,11 +123,16 @@ func scrape(ns string, upMetric prometheus.Gauge, metrics []parser.Metric) {
 	upMetric.Set(1)
 }
 
-func scrapeForever(endpoint string, up prometheus.Gauge, metrics []parser.Metric) {
+func scrapeForever(
+	endpoint string,
+	up prometheus.Gauge,
+	metrics []parser.Metric,
+	scrapeFunc func(string, prometheus.Gauge, []parser.Metric),
+) {
 	scrapeUrl := strings.TrimRight(*es, "/") + endpoint
 	t := time.NewTicker(time.Duration(*timeInterval) * time.Second)
 	for range t.C {
-		scrape(scrapeUrl, up, metrics)
+		scrapeFunc(scrapeUrl, up, metrics)
 	}
 }
 
@@ -115,16 +148,22 @@ func main() {
 		prometheus.MustRegister(metric.Gauge)
 		nodeMetrics[i] = metric
 	}
-	go scrapeForever("/_nodes/stats", up, nodeMetrics)
+	go scrapeForever("/_nodes/stats", up, nodeMetrics, scrapeNodeStats)
 
 	// siren
 	if *enableSiren {
 		m := parser.NewSirenMemoryMetric()
 		prometheus.MustRegister(m.Peak)
 		prometheus.MustRegister(m.Limit)
-		sirenMetrics := []parser.Metric{m}
+		sirenNodeMetrics := []parser.Metric{m}
 
-		go scrapeForever("/_siren/nodes/stats", sirenUp, sirenMetrics)
+		go scrapeForever("/_siren/nodes/stats", sirenUp, sirenNodeMetrics, scrapeNodeStats)
+
+		licenseMetric := parser.NewSirenLicenseMetric()
+		prometheus.MustRegister(licenseMetric.Valid)
+		sirenLicenseMetrics := []parser.Metric{licenseMetric}
+
+		go scrapeForever("/_siren/license", sirenUp, sirenLicenseMetrics, scrapeJson)
 	}
 
 	http.Handle("/metrics", promhttp.Handler())
