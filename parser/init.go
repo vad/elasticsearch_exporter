@@ -198,3 +198,43 @@ func (m SirenMemoryMetric) Observe(object interface{}) error {
 func (m SirenMemoryMetric) String() string {
 	return "Siren Federate Metrics"
 }
+
+type SirenLicenseMetric struct {
+	Valid prometheus.Gauge
+}
+
+func NewSirenLicenseMetric() *SirenLicenseMetric {
+	valid := prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "siren_license_valid",
+			Help: "Siren license validation status (1 if valid, 0 if invalid)",
+		},
+	)
+
+	return &SirenLicenseMetric{
+		Valid: valid,
+	}
+}
+
+func (m SirenLicenseMetric) Observe(object interface{}) error {
+	jresult, err := jmespath.Search("license_validation.is_valid", object)
+	if err != nil {
+		return err
+	}
+	val, ok := jresult.(bool)
+	if !ok {
+		return errors.New("cannot find license_validation.is_valid boolean value")
+	}
+
+	if val {
+		m.Valid.Set(1)
+	} else {
+		m.Valid.Set(0)
+	}
+
+	return nil
+}
+
+func (m SirenLicenseMetric) String() string {
+	return "Siren License Validation"
+}
