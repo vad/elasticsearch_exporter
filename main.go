@@ -30,7 +30,7 @@ var (
 		Help: "Current status of ES",
 	})
 	sirenUp = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "siren_up",
+		Name: "es_siren_up",
 		Help: "Current status of Siren Federate",
 	})
 
