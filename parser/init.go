@@ -206,7 +206,7 @@ type SirenLicenseMetric struct {
 func NewSirenLicenseMetric() *SirenLicenseMetric {
 	valid := prometheus.NewGauge(
 		prometheus.GaugeOpts{
-			Name: "siren_license_valid",
+			Name: "es_siren_license_valid",
 			Help: "Siren license validation status (1 if valid, 0 if invalid)",
 		},
 	)
