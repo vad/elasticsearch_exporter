@@ -50,9 +50,6 @@ es_up{endpoint="http://localhost:9200/_cluster/health"} 1
 By default, this exporter exposes a minimal set of node level metrics. Currently only the recovery throttle time is collected.
 
 ```
-# HELP es_up Current status of ES
-# TYPE es_up gauge
-es_up 1
 # HELP es_indices_recovery_throttle_time_in_millis indices.recovery.throttle_time_in_millis
 # TYPE es_indices_recovery_throttle_time_in_millis gauge
 es_indices_recovery_throttle_time_in_millis{node="node1"} 0
@@ -61,6 +58,9 @@ es_indices_recovery_throttle_time_in_millis{node="node1"} 0
 If started with `-enable-siren`, additional Siren Federate metrics are exported:
 
 ```
+# HELP es_siren_up Current status of Siren Federate
+# TYPE es_siren_up gauge
+es_siren_up 1
 # HELP es_siren_federate_memory_peak Peak memory usage of Siren Federate off-heap storage
 # TYPE es_siren_federate_memory_peak gauge
 es_siren_federate_memory_peak{node="node1"} 0
