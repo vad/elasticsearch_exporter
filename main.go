@@ -25,10 +25,6 @@ var (
 	password     = flag.String("password", "", "Password for the user when XPack security is enabled")
 	enableSiren  = flag.Bool("enable-siren", false, "Enable Siren Federate Plugin scraping")
 
-	up = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "es_up",
-		Help: "Current status of ES",
-	})
 	sirenUp = prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "es_siren_up",
 		Help: "Current status of Siren Federate",
@@ -64,7 +60,9 @@ func queryEs(url string) (*http.Response, error) {
 func scrapeJson(ns string, upMetric prometheus.Gauge, metrics []parser.Metric) {
 	resp, err := queryEs(ns)
 	if err != nil {
-		upMetric.Set(0)
+		if upMetric != nil {
+			upMetric.Set(0)
+		}
 		log.Println(err.Error())
 		return
 	}
@@ -74,7 +72,9 @@ func scrapeJson(ns string, upMetric prometheus.Gauge, metrics []parser.Metric) {
 	decoder := json.NewDecoder(resp.Body)
 	err = decoder.Decode(&object)
 	if err != nil {
-		upMetric.Set(0)
+		if upMetric != nil {
+			upMetric.Set(0)
+		}
 		log.Println("Error decoding JSON:", err.Error())
 		return
 	}
@@ -86,13 +86,17 @@ func scrapeJson(ns string, upMetric prometheus.Gauge, metrics []parser.Metric) {
 		}
 	}
 
-	upMetric.Set(1)
+	if upMetric != nil {
+		upMetric.Set(1)
+	}
 }
 
 func scrapeNodeStats(ns string, upMetric prometheus.Gauge, metrics []parser.Metric) {
 	resp, err := queryEs(ns)
 	if err != nil {
-		upMetric.Set(0)
+		if upMetric != nil {
+			upMetric.Set(0)
+		}
 		log.Println(err.Error())
 		return
 	}
@@ -100,7 +104,9 @@ func scrapeNodeStats(ns string, upMetric prometheus.Gauge, metrics []parser.Metr
 
 	v, err := parser.NewNodeStatsJson(resp.Body)
 	if err != nil {
-		upMetric.Set(0)
+		if upMetric != nil {
+			upMetric.Set(0)
+		}
 		log.Println("Error decoding ES JSON:", err.Error())
 		return
 	}
@@ -120,7 +126,9 @@ func scrapeNodeStats(ns string, upMetric prometheus.Gauge, metrics []parser.Metr
 		}
 	}
 
-	upMetric.Set(1)
+	if upMetric != nil {
+		upMetric.Set(1)
+	}
 }
 
 func scrapeForever(
@@ -148,7 +156,7 @@ func main() {
 		prometheus.MustRegister(metric.Gauge)
 		nodeMetrics[i] = metric
 	}
-	go scrapeForever("/_nodes/stats", up, nodeMetrics, scrapeNodeStats)
+	go scrapeForever("/_nodes/stats", nil, nodeMetrics, scrapeNodeStats)
 
 	// siren
 	if *enableSiren {
