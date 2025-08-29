@@ -67,4 +67,7 @@ es_siren_federate_memory_peak{node="node1"} 0
 # HELP es_siren_federate_memory_limit Memory limit of Siren Federate off-heap storage
 # TYPE es_siren_federate_memory_limit gauge
 es_siren_federate_memory_limit{node="node1"} 0
+# HELP es_siren_license_valid Siren license validation status (1 if valid, 0 if invalid)
+# TYPE es_siren_license_valid gauge
+es_siren_license_valid 1
 ```
