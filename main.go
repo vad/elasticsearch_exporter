@@ -152,6 +152,8 @@ func main() {
 
 	// siren
 	if *enableSiren {
+		prometheus.MustRegister(sirenUp)
+
 		m := parser.NewSirenMemoryMetric()
 		prometheus.MustRegister(m.Peak)
 		prometheus.MustRegister(m.Limit)
