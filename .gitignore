@@ -28,3 +28,6 @@ _testmain.go
 *.sw[po]
 
 dist/
+main
+
+.vscode/
